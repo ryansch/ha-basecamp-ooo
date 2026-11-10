@@ -65,5 +65,11 @@
         }
       }
     }
+  },
+  "issues": {
+    "run_failed": {
+      "title": "Basecamp out-of-office run failed",
+      "description": "The last daily run could not check or set your Basecamp out-of-office: {message}\n\nThis clears automatically after the next successful run."
+    }
   }
 }
