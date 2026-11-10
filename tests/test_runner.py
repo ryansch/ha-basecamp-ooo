@@ -1,6 +1,7 @@
 """Tests for the basecamp_ooo daily runner."""
 
-from datetime import date
+from collections.abc import AsyncGenerator
+from datetime import date, timedelta
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -18,7 +19,10 @@ from homeassistant.exceptions import (
 )
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.update_coordinator import UpdateFailed
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    async_fire_time_changed,
+)
 
 from custom_components.basecamp_ooo.api import BasecampApiError, BasecampAuthError
 from custom_components.basecamp_ooo.const import (
@@ -107,11 +111,21 @@ def client() -> MagicMock:
 
 
 @pytest.fixture
-def runner(
+async def runner(
     hass: HomeAssistant, entry: MockConfigEntry, client: MagicMock
-) -> BasecampOooRunner:
-    """A runner wired to the mocked client."""
-    return BasecampOooRunner(hass, entry, client)
+) -> AsyncGenerator[BasecampOooRunner]:
+    """A runner wired to the mocked client (pending retries cancelled after)."""
+    runner = BasecampOooRunner(hass, entry, client)
+    yield runner
+    runner.async_cancel_retry()
+
+
+async def _advance(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, minutes: float
+) -> None:
+    freezer.tick(timedelta(minutes=minutes))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done(wait_background_tasks=True)
 
 
 def test_initial_state_is_empty(runner: BasecampOooRunner) -> None:
@@ -501,3 +515,115 @@ async def test_stored_start_of_other_stretch_does_not_block(
     assert state.result is Result.SET
     client.set_out_of_office.assert_awaited_once()
     assert hass_storage[_store_key(entry)]["data"] == {"set_start": "2026-11-13"}
+
+
+async def test_error_run_retries_same_day(
+    hass: HomeAssistant,
+    runner: BasecampOooRunner,
+    client: MagicMock,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """A failed run is retried 5 minutes later and the retry sets OOO."""
+    client.list_schedule_entries.side_effect = [BasecampApiError("down"), [ENTRY]]
+
+    assert (await runner.run_now()).result is Result.ERROR
+
+    await _advance(hass, freezer, 4)
+    assert client.list_schedule_entries.await_count == 1
+
+    await _advance(hass, freezer, 1)
+    assert client.list_schedule_entries.await_count == 2
+    assert runner.data.result is Result.SET
+    client.set_out_of_office.assert_awaited_once()
+    assert ir.async_get(hass).async_get_issue(DOMAIN, ISSUE_RUN_FAILED) is None
+
+    await _advance(hass, freezer, 120)  # success ends the retries
+    assert client.list_schedule_entries.await_count == 2
+
+
+async def test_retry_backoff_5_15_then_every_30_minutes(
+    hass: HomeAssistant,
+    runner: BasecampOooRunner,
+    client: MagicMock,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """Retries back off 5, 15, then 30 minutes while runs keep failing."""
+    client.list_schedule_entries.side_effect = BasecampApiError("down")
+    await runner.run_now()
+
+    expected = 1
+    for delay in (5, 15, 30, 30, 30):
+        await _advance(hass, freezer, delay - 1)
+        assert client.list_schedule_entries.await_count == expected
+        await _advance(hass, freezer, 1)
+        expected += 1
+        assert client.list_schedule_entries.await_count == expected
+
+
+async def test_retry_stops_at_local_midnight(
+    hass: HomeAssistant,
+    runner: BasecampOooRunner,
+    client: MagicMock,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """A retry due after local midnight does not run (03:50 UTC is 23:50 AST)."""
+    freezer.move_to("2026-11-13 03:50:00+00:00")
+    client.list_schedule_entries.side_effect = BasecampApiError("down")
+    await runner.run_now()
+
+    await _advance(hass, freezer, 5)  # 23:55 local: same day, retried
+    assert client.list_schedule_entries.await_count == 2
+
+    await _advance(hass, freezer, 15)  # 00:10 local on a new day: not run
+    await _advance(hass, freezer, 120)
+    assert client.list_schedule_entries.await_count == 2
+
+
+async def test_auth_error_not_retried(
+    hass: HomeAssistant,
+    runner: BasecampOooRunner,
+    client: MagicMock,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """Auth failures go to reauth and are not retried."""
+    client.list_schedule_entries.side_effect = BasecampAuthError("unauthorized")
+    await runner.run_now()
+
+    await _advance(hass, freezer, 120)
+
+    assert client.list_schedule_entries.await_count == 1
+
+
+async def test_auth_error_cancels_pending_retry(
+    hass: HomeAssistant,
+    runner: BasecampOooRunner,
+    client: MagicMock,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """An auth failure after a retryable error stops the retries."""
+    client.list_schedule_entries.side_effect = [
+        BasecampApiError("down"),
+        BasecampAuthError("unauthorized"),
+    ]
+    await runner.run_now()
+    await runner.run_now()
+
+    await _advance(hass, freezer, 120)
+
+    assert client.list_schedule_entries.await_count == 2
+
+
+async def test_successful_run_cancels_pending_retry(
+    hass: HomeAssistant,
+    runner: BasecampOooRunner,
+    client: MagicMock,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """A successful Run now before the retry fires cancels the retry."""
+    client.list_schedule_entries.side_effect = [BasecampApiError("down"), [ENTRY]]
+    await runner.run_now()
+    await runner.run_now()
+
+    await _advance(hass, freezer, 120)
+
+    assert client.list_schedule_entries.await_count == 2

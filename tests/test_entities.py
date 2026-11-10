@@ -292,13 +292,17 @@ async def test_last_run_stays_available_when_poll_fails(
 ) -> None:
     """A failing 30-minute OOO poll must not hide the last run's error."""
     client.list_schedule_entries.side_effect = RuntimeError("Basecamp is down")
-    await _setup(hass, entry)  # startup run errors
-    assert hass.states.get(LAST_RUN).attributes["result"] == "error"
+    # Push the same-day retry past the poll so only the poll fires at +31 min.
+    with patch(
+        "custom_components.basecamp_ooo.runner.RETRY_DELAYS", (timedelta(hours=2),)
+    ):
+        await _setup(hass, entry)  # startup run errors
+        assert hass.states.get(LAST_RUN).attributes["result"] == "error"
 
-    client.get_out_of_office.side_effect = RuntimeError("still down")
-    freezer.tick(timedelta(minutes=31))
-    async_fire_time_changed(hass)
-    await hass.async_block_till_done(wait_background_tasks=True)
+        client.get_out_of_office.side_effect = RuntimeError("still down")
+        freezer.tick(timedelta(minutes=31))
+        async_fire_time_changed(hass)
+        await hass.async_block_till_done(wait_background_tasks=True)
 
     assert entry.runtime_data.last_update_success is False  # the poll failed
     state = hass.states.get(LAST_RUN)

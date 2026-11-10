@@ -1,7 +1,7 @@
 """Tests for the basecamp_ooo integration setup."""
 
 from collections.abc import Generator
-from datetime import date
+from datetime import date, timedelta
 import time
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -323,3 +323,24 @@ async def test_store_removed_on_entry_removal(
     await hass.async_block_till_done()
 
     assert key not in hass_storage
+
+
+async def test_retry_cancelled_on_unload(
+    hass: HomeAssistant,
+    client_cls: MagicMock,
+    client: MagicMock,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """Unloading the entry cancels a pending retry of a failed run."""
+    client.list_schedule_entries.side_effect = RuntimeError("Basecamp is down")
+    entry = _entry(hass)
+    await _setup(hass, entry)  # startup run fails and schedules a retry
+    assert entry.runtime_data.data.result is Result.ERROR
+
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    freezer.tick(timedelta(minutes=60))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert client.list_schedule_entries.await_count == 1

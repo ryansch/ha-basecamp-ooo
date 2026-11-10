@@ -10,12 +10,13 @@ import logging
 from aiohttp import ClientResponseError
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.exceptions import (
     ConfigEntryAuthFailed,
     OAuth2TokenRequestReauthError,
 )
 from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
@@ -37,6 +38,8 @@ _LOGGER = logging.getLogger(__name__)
 UPDATE_INTERVAL = timedelta(minutes=30)
 ISSUE_RUN_FAILED = "run_failed"
 STORAGE_VERSION = 1
+# Delays between retries of a failed run; the last one repeats until midnight.
+RETRY_DELAYS = (timedelta(minutes=5), timedelta(minutes=15), timedelta(minutes=30))
 ALREADY_SET_MESSAGE = (
     "Out-of-office was already set for this stretch today; not setting it again."
 )
@@ -105,6 +108,10 @@ class BasecampOooRunner(DataUpdateCoordinator[RunState]):
         )
         self._last_set_start: date | None = None
         self._store_loaded = False
+        # Same-day retry of a failed run.
+        self._retry_unsub: CALLBACK_TYPE | None = None
+        self._retry_day: date | None = None
+        self._retry_attempt = 0
         self.data = RunState(
             last_run=None,
             result=None,
@@ -130,12 +137,46 @@ class BasecampOooRunner(DataUpdateCoordinator[RunState]):
     async def run_now(self) -> RunState:
         """Perform the full daily run. Never raises; failures record `error`."""
         async with self._run_lock:
-            state = await self._run()
+            state, retryable = await self._run()
         self._update_repair(state)
+        self._schedule_retry(state, retryable)
         self.async_set_updated_data(state)
         return state
 
-    async def _run(self) -> RunState:
+    @callback
+    def async_cancel_retry(self) -> None:
+        """Cancel a pending retry, if any."""
+        if self._retry_unsub is not None:
+            self._retry_unsub()
+            self._retry_unsub = None
+
+    @callback
+    def _schedule_retry(self, state: RunState, retryable: bool) -> None:
+        """Retry a failed run later the same HA-local day (not auth failures)."""
+        self.async_cancel_retry()
+        if state.result is not Result.ERROR or not retryable or state.last_run is None:
+            self._retry_day, self._retry_attempt = None, 0
+            return
+        today = state.last_run.date()
+        if self._retry_day != today:
+            self._retry_day, self._retry_attempt = today, 0
+        delay = RETRY_DELAYS[min(self._retry_attempt, len(RETRY_DELAYS) - 1)]
+        self._retry_attempt += 1
+        self._retry_unsub = async_call_later(self.hass, delay, self._async_retry)
+
+    @callback
+    def _async_retry(self, _now: datetime) -> None:
+        self._retry_unsub = None
+        if dt_util.now().date() != self._retry_day:
+            # A new day: the scheduled daily run takes over.
+            self._retry_day, self._retry_attempt = None, 0
+            return
+        self.config_entry.async_create_background_task(
+            self.hass, self.run_now(), f"{DOMAIN} retry {self.config_entry.entry_id}"
+        )
+
+    async def _run(self) -> tuple[RunState, bool]:
+        """Run once; return the state and whether a failure may be retried."""
         now = dt_util.now()
         today = now.date()
         previous = self.data
@@ -159,14 +200,15 @@ class BasecampOooRunner(DataUpdateCoordinator[RunState]):
                     set_start, set_end = stretch.start, stretch.end
                     await self._record_set(stretch.start)
         except Exception as err:  # a run must never escape the scheduler
-            if _is_auth_failure(err):
+            retryable = not _is_auth_failure(err)
+            if not retryable:
                 _LOGGER.warning("Basecamp authorization failed: %s", err)
                 self.config_entry.async_start_reauth(self.hass)
                 message = f"Basecamp authorization failed: {err}"
             else:
                 _LOGGER.exception("Basecamp out-of-office run failed")
                 message = f"Run failed: {err}"
-            return RunState(
+            state = RunState(
                 last_run=now,
                 result=Result.ERROR,
                 message=message,
@@ -175,8 +217,9 @@ class BasecampOooRunner(DataUpdateCoordinator[RunState]):
                 next_stretch=previous.next_stretch,
                 ooo=previous.ooo,
             )
+            return state, retryable
 
-        return RunState(
+        state = RunState(
             last_run=now,
             result=result,
             message=message or _message(result, stretch, ooo),
@@ -185,6 +228,7 @@ class BasecampOooRunner(DataUpdateCoordinator[RunState]):
             next_stretch=current_or_next(stretches, today),
             ooo=ooo,
         )
+        return state, False
 
     async def _last_set(self) -> date | None:
         """Return the start of the last stretch set, loading it once."""
