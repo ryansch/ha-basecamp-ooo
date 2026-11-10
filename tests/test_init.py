@@ -3,6 +3,7 @@
 from collections.abc import Generator
 from datetime import date
 import time
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from freezegun.api import FrozenDateTimeFactory
@@ -306,3 +307,19 @@ async def test_token_refresh_failure_starts_reauth(
     assert "authorization failed" in entry.runtime_data.data.message  # mapped as auth
     assert list(entry.async_get_active_flows(hass, {SOURCE_REAUTH}))
     client.set_out_of_office.assert_not_awaited()
+
+
+async def test_store_removed_on_entry_removal(
+    hass: HomeAssistant, client_cls: MagicMock, hass_storage: dict[str, Any]
+) -> None:
+    """Removing the config entry deletes its stored state."""
+    entry = _entry(hass)
+    await _setup(hass, entry)
+    key = f"{DOMAIN}.{entry.entry_id}"
+    assert entry.runtime_data.data.result is Result.SET
+    assert key in hass_storage
+
+    await hass.config_entries.async_remove(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert key not in hass_storage

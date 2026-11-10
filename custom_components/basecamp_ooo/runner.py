@@ -16,6 +16,7 @@ from homeassistant.exceptions import (
     OAuth2TokenRequestReauthError,
 )
 from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
@@ -35,6 +36,10 @@ _LOGGER = logging.getLogger(__name__)
 
 UPDATE_INTERVAL = timedelta(minutes=30)
 ISSUE_RUN_FAILED = "run_failed"
+STORAGE_VERSION = 1
+ALREADY_SET_MESSAGE = (
+    "Out-of-office was already set for this stretch today; not setting it again."
+)
 
 # Token-endpoint statuses that mean the refresh token itself was rejected.
 _REAUTH_STATUSES = (400, 401)
@@ -55,6 +60,11 @@ class RunState:
 
 class UnexpectedResponseError(Exception):
     """Basecamp accepted the write but reported a different out-of-office."""
+
+
+def storage_key(entry_id: str) -> str:
+    """Return the storage key for a config entry's persisted run state."""
+    return f"{DOMAIN}.{entry_id}"
 
 
 def _is_auth_failure(err: Exception) -> bool:
@@ -88,6 +98,13 @@ class BasecampOooRunner(DataUpdateCoordinator[RunState]):
         self.person_id: int = entry.data[CONF_PERSON_ID]
         self.schedule_id: int = entry.data[CONF_SCHEDULE_ID]
         self._run_lock = asyncio.Lock()
+        # Start date of the last stretch this integration set, persisted so a
+        # restart or reload doesn't re-set OOO the user cleared by hand.
+        self._store: Store[dict[str, str]] = Store(
+            hass, STORAGE_VERSION, storage_key(entry.entry_id)
+        )
+        self._last_set_start: date | None = None
+        self._store_loaded = False
         self.data = RunState(
             last_run=None,
             result=None,
@@ -128,14 +145,19 @@ class BasecampOooRunner(DataUpdateCoordinator[RunState]):
             # Re-read immediately before deciding so "already set" uses fresh state.
             ooo = await self.client.get_out_of_office(self.person_id)
             decision = decide(today, stretches, ooo)
-            stretch = decision.stretch
+            result, stretch = decision.result, decision.stretch
+            message: str | None = None
             set_start = set_end = None
-            if decision.result is Result.SET and stretch is not None:
-                ooo = await self.client.set_out_of_office(
-                    self.person_id, stretch.start, stretch.end
-                )
-                _verify_set(ooo, stretch)
-                set_start, set_end = stretch.start, stretch.end
+            if result is Result.SET and stretch is not None:
+                if await self._last_set() == stretch.start:
+                    result, message = Result.ALREADY_ACTIVE, ALREADY_SET_MESSAGE
+                else:
+                    ooo = await self.client.set_out_of_office(
+                        self.person_id, stretch.start, stretch.end
+                    )
+                    _verify_set(ooo, stretch)
+                    set_start, set_end = stretch.start, stretch.end
+                    await self._record_set(stretch.start)
         except Exception as err:  # a run must never escape the scheduler
             if _is_auth_failure(err):
                 _LOGGER.warning("Basecamp authorization failed: %s", err)
@@ -156,13 +178,29 @@ class BasecampOooRunner(DataUpdateCoordinator[RunState]):
 
         return RunState(
             last_run=now,
-            result=decision.result,
-            message=_message(decision.result, stretch, ooo),
+            result=result,
+            message=message or _message(result, stretch, ooo),
             set_start=set_start,
             set_end=set_end,
             next_stretch=current_or_next(stretches, today),
             ooo=ooo,
         )
+
+    async def _last_set(self) -> date | None:
+        """Return the start of the last stretch set, loading it once."""
+        if not self._store_loaded:
+            data = await self._store.async_load() or {}
+            try:
+                self._last_set_start = date.fromisoformat(data["set_start"])
+            except KeyError, TypeError, ValueError:
+                self._last_set_start = None
+            self._store_loaded = True
+        return self._last_set_start
+
+    async def _record_set(self, start: date) -> None:
+        self._last_set_start = start
+        self._store_loaded = True
+        await self._store.async_save({"set_start": start.isoformat()})
 
     def _update_repair(self, state: RunState) -> None:
         if state.result is Result.ERROR:

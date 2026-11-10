@@ -1,6 +1,7 @@
 """Tests for the basecamp_ooo daily runner."""
 
 from datetime import date
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 from aiohttp import ClientResponseError, RequestInfo
@@ -406,6 +407,8 @@ async def test_post_response_mismatch_records_error(
     hass: HomeAssistant,
     runner: BasecampOooRunner,
     client: MagicMock,
+    entry: MockConfigEntry,
+    hass_storage: dict[str, Any],
     returned: OutOfOffice,
 ) -> None:
     """A POST whose response doesn't match the stretch is an error, not a set."""
@@ -419,3 +422,82 @@ async def test_post_response_mismatch_records_error(
     assert f"{returned.start} to {returned.end}" in state.message  # returned
     assert state.set_start is None
     assert ir.async_get(hass).async_get_issue(DOMAIN, ISSUE_RUN_FAILED) is not None
+    assert _store_key(entry) not in hass_storage  # not recorded as set
+
+
+ALREADY_SET_MESSAGE = (
+    "Out-of-office was already set for this stretch today; not setting it again."
+)
+
+
+def _store_key(entry: MockConfigEntry) -> str:
+    return f"{DOMAIN}.{entry.entry_id}"
+
+
+async def test_set_records_stretch_start_in_store(
+    runner: BasecampOooRunner, entry: MockConfigEntry, hass_storage: dict[str, Any]
+) -> None:
+    """A successful set persists the stretch start it set."""
+    await runner.run_now()
+
+    stored = hass_storage[_store_key(entry)]
+    assert stored["version"] == 1
+    assert stored["data"] == {"set_start": "2026-11-13"}
+
+
+async def test_cleared_ooo_not_reset_after_restart(
+    hass: HomeAssistant,
+    runner: BasecampOooRunner,
+    client: MagicMock,
+    entry: MockConfigEntry,
+) -> None:
+    """OOO cleared by hand after the set stays cleared across a restart/reload."""
+    first = await runner.run_now()
+    assert first.result is Result.SET
+
+    # Restart: a fresh runner for the same entry; the user cleared the OOO.
+    client.get_out_of_office.return_value = OOO_OFF
+    restarted = BasecampOooRunner(hass, entry, client)
+    state = await restarted.run_now()
+
+    assert client.set_out_of_office.await_count == 1
+    assert state.result is Result.ALREADY_ACTIVE
+    assert state.message == ALREADY_SET_MESSAGE
+    assert state.set_start is None
+    assert state.set_end is None
+    assert state.ooo == OOO_OFF
+
+
+async def test_cleared_ooo_not_reset_by_second_run_same_session(
+    runner: BasecampOooRunner, client: MagicMock
+) -> None:
+    """Run now after clearing the OOO by hand does not set it again."""
+    await runner.run_now()
+    client.get_out_of_office.return_value = OOO_OFF
+
+    state = await runner.run_now()
+
+    assert client.set_out_of_office.await_count == 1
+    assert state.result is Result.ALREADY_ACTIVE
+    assert state.message == ALREADY_SET_MESSAGE
+
+
+async def test_stored_start_of_other_stretch_does_not_block(
+    hass: HomeAssistant,
+    client: MagicMock,
+    entry: MockConfigEntry,
+    hass_storage: dict[str, Any],
+) -> None:
+    """A stored start from an earlier stretch does not stop this one being set."""
+    hass_storage[_store_key(entry)] = {
+        "version": 1,
+        "key": _store_key(entry),
+        "data": {"set_start": "2026-11-02"},
+    }
+    runner = BasecampOooRunner(hass, entry, client)
+
+    state = await runner.run_now()
+
+    assert state.result is Result.SET
+    client.set_out_of_office.assert_awaited_once()
+    assert hass_storage[_store_key(entry)]["data"] == {"set_start": "2026-11-13"}

@@ -11,11 +11,12 @@ from homeassistant.helpers import config_entry_oauth2_flow
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.start import async_at_started
+from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .api import BasecampClient
 from .const import CONF_ACCOUNT_ID, CONF_RUN_TIME, DEFAULT_RUN_TIME, DOMAIN
-from .runner import BasecampOooRunner
+from .runner import STORAGE_VERSION, BasecampOooRunner, storage_key
 
 PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BINARY_SENSOR, Platform.BUTTON]
 
@@ -91,3 +92,10 @@ async def async_unload_entry(
 ) -> bool:
     """Unload a Basecamp Out of Office config entry."""
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+
+async def async_remove_entry(
+    hass: HomeAssistant, entry: BasecampOooConfigEntry
+) -> None:
+    """Delete the entry's persisted run state when the entry is removed."""
+    await Store(hass, STORAGE_VERSION, storage_key(entry.entry_id)).async_remove()
