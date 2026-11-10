@@ -391,3 +391,31 @@ async def test_periodic_update_other_failure_raises_update_failed(
 def test_update_interval_is_30_minutes(runner: BasecampOooRunner) -> None:
     """The periodic OOO refresh runs every 30 minutes."""
     assert runner.update_interval.total_seconds() == 30 * 60
+
+
+@pytest.mark.parametrize(
+    "returned",
+    [
+        OutOfOffice(True, date(2026, 11, 13), date(2026, 11, 14)),
+        OutOfOffice(True, date(2026, 11, 12), date(2026, 11, 16)),
+        OutOfOffice(False, None, None),
+    ],
+    ids=["wrong_end", "wrong_start", "not_enabled"],
+)
+async def test_post_response_mismatch_records_error(
+    hass: HomeAssistant,
+    runner: BasecampOooRunner,
+    client: MagicMock,
+    returned: OutOfOffice,
+) -> None:
+    """A POST whose response doesn't match the stretch is an error, not a set."""
+    client.set_out_of_office.side_effect = None
+    client.set_out_of_office.return_value = returned
+
+    state = await runner.run_now()
+
+    assert state.result is Result.ERROR
+    assert "2026-11-13 to 2026-11-16" in state.message  # expected
+    assert f"{returned.start} to {returned.end}" in state.message  # returned
+    assert state.set_start is None
+    assert ir.async_get(hass).async_get_issue(DOMAIN, ISSUE_RUN_FAILED) is not None

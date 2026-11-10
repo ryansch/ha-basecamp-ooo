@@ -53,6 +53,10 @@ class RunState:
     ooo: OutOfOffice | None
 
 
+class UnexpectedResponseError(Exception):
+    """Basecamp accepted the write but reported a different out-of-office."""
+
+
 def _is_auth_failure(err: Exception) -> bool:
     """Return True if the error means the user must sign in again.
 
@@ -130,6 +134,7 @@ class BasecampOooRunner(DataUpdateCoordinator[RunState]):
                 ooo = await self.client.set_out_of_office(
                     self.person_id, stretch.start, stretch.end
                 )
+                _verify_set(ooo, stretch)
                 set_start, set_end = stretch.start, stretch.end
         except Exception as err:  # a run must never escape the scheduler
             if _is_auth_failure(err):
@@ -172,6 +177,16 @@ class BasecampOooRunner(DataUpdateCoordinator[RunState]):
             )
         else:
             ir.async_delete_issue(self.hass, DOMAIN, ISSUE_RUN_FAILED)
+
+
+def _verify_set(ooo: OutOfOffice, stretch: Stretch) -> None:
+    """Raise unless Basecamp reports exactly the out-of-office just written."""
+    if ooo.enabled and (ooo.start, ooo.end) == (stretch.start, stretch.end):
+        return
+    raise UnexpectedResponseError(
+        f"Basecamp returned out-of-office {ooo.start} to {ooo.end} "
+        f"(enabled: {ooo.enabled}); expected {stretch.start} to {stretch.end}"
+    )
 
 
 def _message(result: Result, stretch: Stretch | None, ooo: OutOfOffice) -> str:
