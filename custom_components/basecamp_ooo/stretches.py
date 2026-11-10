@@ -70,11 +70,17 @@ def days_off(entries: list[dict], person_id: int) -> dict[date, set[int]]:
             continue
         if not any(p.get("id") == person_id for p in entry.get("participants") or []):
             continue
-        start = _parse_date(entry["starts_at"])
-        end = _parse_date(entry["ends_at"])
+        entry_id = entry.get("id")
+        if entry_id is None:
+            continue
+        try:
+            start = date.fromisoformat(entry["starts_at"][:10])
+            end = date.fromisoformat(entry["ends_at"][:10])
+        except (KeyError, TypeError, ValueError):
+            continue  # malformed entry: skip it rather than fail the run
         day = start
         while day <= end:
-            days.setdefault(day, set()).add(entry["id"])
+            days.setdefault(day, set()).add(entry_id)
             day += timedelta(days=1)
     return days
 

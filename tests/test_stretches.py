@@ -231,3 +231,39 @@ def test_out_of_office_from_api_enabled_parses_dates():
     assert OutOfOffice.from_api(payload) == OutOfOffice(
         enabled=True, start=date(2026, 11, 13), end=date(2026, 11, 16)
     )
+
+
+VALID = entry(9, "2026-11-20", "2026-11-20")
+
+
+def test_skips_entry_missing_dates():
+    no_start = entry(1, "2026-11-11", "2026-11-11")
+    del no_start["starts_at"]
+    no_end = entry(2, "2026-11-12", "2026-11-12")
+    del no_end["ends_at"]
+
+    assert days_off([no_start, no_end, VALID], PERSON_ID) == {date(2026, 11, 20): {9}}
+
+
+def test_skips_entry_missing_id():
+    no_id = entry(1, "2026-11-11", "2026-11-11")
+    del no_id["id"]
+
+    assert days_off([no_id, VALID], PERSON_ID) == {date(2026, 11, 20): {9}}
+
+
+def test_skips_entry_with_unparseable_date():
+    garbage = entry(1, "not-a-date", "2026-11-11")
+    null_end = entry(2, "2026-11-12", None)
+
+    assert days_off([garbage, null_end, VALID], PERSON_ID) == {
+        date(2026, 11, 20): {9}
+    }
+
+
+def test_decide_already_active_started_before_today():
+    ooo = OutOfOffice(enabled=True, start=date(2026, 11, 12), end=STRETCH.end)
+
+    assert decide(date(2026, 11, 13), [STRETCH], ooo) == Decision(
+        Result.ALREADY_ACTIVE, STRETCH
+    )
