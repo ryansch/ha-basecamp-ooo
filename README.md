@@ -1,7 +1,7 @@
 # Basecamp Out of Office
 
 A Home Assistant custom integration that turns on your Basecamp out-of-office on
-the first morning of a stretch of time off, using the all-day entries on a
+the first day of a stretch of time off, using the all-day entries on a
 Basecamp calendar (schedule).
 
 Setup happens in the Home Assistant UI: a config flow that signs in to Basecamp
@@ -49,9 +49,14 @@ the daily check runs. Change it under the integration's **Configure** button.
 
 Once a day, at the run time, the integration reads the schedule, works out your
 stretches of time off, and decides whether to set out-of-office. It also runs
-once each time Home Assistant starts (or the integration loads), so a morning
+once each time Home Assistant starts (or the integration loads), so a run
 missed while Home Assistant was down is caught up. The **Run now** button runs
-the same check on demand.
+the same check on demand. Both act at any time on the first day of a stretch.
+
+If a run fails (for example, Basecamp is down), it is retried later the same
+day: after 5 minutes, then 15, then every 30 minutes until midnight in Home
+Assistant's time zone. Authorization failures are not retried; they start
+reauthentication instead (see Troubleshooting).
 
 ### What counts as a day off
 
@@ -64,37 +69,41 @@ the same check on demand.
 
 - Consecutive days off merge into one stretch.
 - A weekend between two days off joins them: Friday off plus Monday off is one
-  Friday-to-Monday stretch, and out-of-office is set on Friday morning, ending
+  Friday-to-Monday stretch, and out-of-office is set on Friday, ending
   Monday.
 - A stretch that ends on a Friday still ends on Friday; the weekend after it is
   not added.
 
 ### When it sets out-of-office
 
-- Only on the **first morning of a stretch**. Running on a later day of the same
+- Only on the **first day of a stretch**. Running on a later day of the same
   stretch does nothing.
 - It sets out-of-office from the stretch's first day to its last day.
 - It **never overwrites or replaces an existing out-of-office**, whether it is
   active now or set for a future date. If one exists, the run leaves it alone.
+  An out-of-office whose end date has already passed doesn't count.
 - It **never clears out-of-office**. Basecamp turns it off by itself after the
   end date.
-- It never sets out-of-office ahead of time; it only acts on the morning time
-  off starts.
+- It never sets out-of-office ahead of time; it only acts on the day time off
+  starts.
+- It sets each stretch **only once**. If you turn off an out-of-office it set,
+  it stays off: a later run that day (Run now, a retry, a restart, or a reload)
+  won't set it again.
 
 Anything you set by hand in Basecamp (a sick day, an early finish) stays
 yours: the integration won't change or remove it.
 
 ## Entities
 
-All entities belong to one service device, **Basecamp Out of Office**. Default
-entity IDs:
+All entities belong to one service device, **Basecamp OOO**. Default entity
+IDs:
 
 | Entity | Description |
 | --- | --- |
-| `sensor.basecamp_out_of_office_next_time_off` | Start date of the current or next stretch of time off. Attributes: `end` (last day of the stretch), `entry_ids` (the schedule entries that make it up). |
-| `sensor.basecamp_out_of_office_last_run` | Time of the last run. Attributes: `result`, `message` (human-readable summary), `set_start` / `set_end` (dates set by that run, if any). |
-| `binary_sensor.basecamp_out_of_office_active` | On while Basecamp out-of-office is enabled and covers today. |
-| `button.basecamp_out_of_office_run_now` | Runs the daily check immediately. |
+| `sensor.basecamp_ooo_next_time_off` | Start date of the current or next stretch of time off. Attributes: `end` (last day of the stretch), `entry_ids` (the schedule entries that make it up). |
+| `sensor.basecamp_ooo_last_run` | Time of the last run. Attributes: `result`, `message` (human-readable summary), `set_start` / `set_end` (dates set by that run, if any). |
+| `binary_sensor.basecamp_ooo_active` | On while Basecamp out-of-office is enabled and covers today. |
+| `button.basecamp_ooo_run_now` | Runs the daily check immediately. |
 
 The out-of-office state behind the binary sensor is refreshed every 30 minutes,
 so changes you make in Basecamp show up without waiting for the next daily run.
@@ -105,7 +114,7 @@ so changes you make in Basecamp show up without waiting for the next daily run.
 | --- | --- |
 | `no_time_off_today` | Today isn't part of any stretch. |
 | `mid_stretch` | Today is in a stretch but not its first day; nothing to do. |
-| `already_active` | A stretch starts today and out-of-office already covers today. |
+| `already_active` | A stretch starts today and out-of-office already covers today, or the integration already set it for this stretch (and it isn't set again). |
 | `skipped_existing_future` | A stretch starts today, but an out-of-office is already set for another period; it was left in place. |
 | `set` | Out-of-office was set for the stretch. |
 | `error` | The run failed; see `message`. |
@@ -113,8 +122,9 @@ so changes you make in Basecamp show up without waiting for the next daily run.
 ## Troubleshooting
 
 - **Failed runs** raise a repair issue, "Basecamp out-of-office run failed",
-  under **Settings > Repairs**, with the error message. It clears itself after
-  the next successful run.
+  under **Settings > Repairs**, with the error message. The run is retried
+  later the same day, and the repair clears itself after the next successful
+  run.
 - **Authorization failures** (revoked access, expired refresh token) start a
   reauthentication flow: Home Assistant shows the integration as needing
   attention, and you sign in to Basecamp again. Sign in as the same Basecamp
