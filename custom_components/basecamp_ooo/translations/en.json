@@ -1,0 +1,69 @@
+{
+  "application_credentials": {
+    "description": "Register an integration at [Launchpad]({integrations_url}) and set its Redirect URI to `{redirect_url}`. Then enter its Client ID and Client Secret here."
+  },
+  "config": {
+    "step": {
+      "pick_implementation": {
+        "title": "Pick authentication method"
+      },
+      "account": {
+        "title": "Choose Basecamp account",
+        "data": {
+          "account_id": "Account"
+        }
+      },
+      "schedule": {
+        "title": "Time-off schedule",
+        "description": "Paste the URL of the schedule in {account} that holds your time-off entries, e.g. `https://3.basecamp.com/1234567/buckets/2345678/schedules/3456789`.",
+        "data": {
+          "schedule_url": "Schedule URL"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Reauthenticate Basecamp",
+        "description": "Basecamp Out of Office needs to sign in to Basecamp again."
+      }
+    },
+    "error": {
+      "invalid_url": "That is not a Basecamp schedule URL.",
+      "account_mismatch": "That schedule belongs to a different Basecamp account.",
+      "invalid_auth": "Basecamp rejected the authorization.",
+      "cannot_connect": "Failed to connect to Basecamp."
+    },
+    "abort": {
+      "already_configured": "This Basecamp account and person are already configured.",
+      "reauth_successful": "Reauthentication was successful.",
+      "wrong_account": "You signed in as a different Basecamp person than the one configured.",
+      "no_accounts": "This Basecamp login has no Basecamp 3/4 accounts.",
+      "invalid_auth": "Basecamp rejected the authorization.",
+      "cannot_connect": "Failed to connect to Basecamp.",
+      "missing_configuration": "Basecamp application credentials are not configured.",
+      "missing_credentials": "Add Basecamp application credentials first.",
+      "authorize_url_timeout": "Timeout generating the authorize URL.",
+      "no_url_available": "No URL available. See {docs_url}.",
+      "oauth_error": "Received invalid token data.",
+      "oauth_failed": "Error while obtaining the access token.",
+      "oauth_timeout": "Timeout resolving the OAuth token.",
+      "oauth_unauthorized": "OAuth authorization error while obtaining the access token.",
+      "oauth_implementation_unavailable": "The OAuth implementation is unavailable.",
+      "user_rejected_authorize": "Authorization was rejected: {error}"
+    },
+    "create_entry": {
+      "default": "Successfully authenticated with Basecamp."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Basecamp Out of Office options",
+        "data": {
+          "run_time": "Daily run time"
+        },
+        "data_description": {
+          "run_time": "Local time each day to check for time off starting today."
+        }
+      }
+    }
+  }
+}
