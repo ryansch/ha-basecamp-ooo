@@ -2,7 +2,7 @@
 
 from collections.abc import Generator
 from dataclasses import replace
-from datetime import date
+from datetime import date, timedelta
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -19,13 +19,17 @@ from homeassistant.const import (
     ATTR_ENTITY_ID,
     STATE_OFF,
     STATE_ON,
+    STATE_UNAVAILABLE,
     STATE_UNKNOWN,
 )
 from homeassistant.core import CoreState, HomeAssistant
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.setup import async_setup_component
 from homeassistant.util import dt as dt_util
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    async_fire_time_changed,
+)
 
 from custom_components.basecamp_ooo.const import (
     CONF_ACCOUNT_ID,
@@ -259,3 +263,45 @@ async def test_run_now_button_triggers_run(
 
     entity = er.async_get(hass).async_get(RUN_NOW)
     assert entity.unique_id == f"{UNIQUE_ID}_run_now"
+
+
+async def test_last_run_shows_error_after_failed_run(
+    hass: HomeAssistant, entry: MockConfigEntry, client: MagicMock
+) -> None:
+    """A failed run is visible on last_run as result `error` with a message."""
+    hass.set_state(CoreState.not_running)
+    client.list_schedule_entries.side_effect = RuntimeError("Basecamp is down")
+    await _setup(hass, entry)
+
+    await hass.services.async_call(
+        BUTTON_DOMAIN, SERVICE_PRESS, {ATTR_ENTITY_ID: RUN_NOW}, blocking=True
+    )
+    await hass.async_block_till_done()
+
+    state = hass.states.get(LAST_RUN)
+    assert state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE)
+    assert state.attributes["result"] == "error"
+    assert "Basecamp is down" in state.attributes["message"]
+
+
+async def test_last_run_stays_available_when_poll_fails(
+    hass: HomeAssistant,
+    entry: MockConfigEntry,
+    client: MagicMock,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """A failing 30-minute OOO poll must not hide the last run's error."""
+    client.list_schedule_entries.side_effect = RuntimeError("Basecamp is down")
+    await _setup(hass, entry)  # startup run errors
+    assert hass.states.get(LAST_RUN).attributes["result"] == "error"
+
+    client.get_out_of_office.side_effect = RuntimeError("still down")
+    freezer.tick(timedelta(minutes=31))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert entry.runtime_data.last_update_success is False  # the poll failed
+    state = hass.states.get(LAST_RUN)
+    assert state.state != STATE_UNAVAILABLE
+    assert state.attributes["result"] == "error"
+    assert "Basecamp is down" in state.attributes["message"]

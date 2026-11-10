@@ -64,6 +64,15 @@ class LastRunSensor(BasecampOooEntity, SensorEntity):
         super().__init__(runner, "last_run")
 
     @property
+    def available(self) -> bool:
+        """Stay available once a run has happened.
+
+        A failed 30-minute out-of-office poll must not hide the last run's
+        result (often `error` from the same outage).
+        """
+        return self.coordinator.data.last_run is not None or super().available
+
+    @property
     def native_value(self) -> datetime | None:
         """Return the time of the last run."""
         return self.coordinator.data.last_run
