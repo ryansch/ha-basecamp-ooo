@@ -71,5 +71,55 @@
       "title": "Basecamp out-of-office run failed",
       "description": "The last daily run could not check or set your Basecamp out-of-office: {message}\n\nThis clears automatically after the next successful run."
     }
+  },
+  "entity": {
+    "binary_sensor": {
+      "active": {
+        "name": "Active"
+      }
+    },
+    "button": {
+      "run_now": {
+        "name": "Run now"
+      }
+    },
+    "sensor": {
+      "last_run": {
+        "name": "Last run",
+        "state_attributes": {
+          "result": {
+            "name": "Result",
+            "state": {
+              "no_time_off_today": "No time off today",
+              "mid_stretch": "Mid-stretch",
+              "already_active": "Already active",
+              "skipped_existing_future": "Skipped (existing future out-of-office)",
+              "set": "Set",
+              "error": "Error"
+            }
+          },
+          "message": {
+            "name": "Message"
+          },
+          "set_start": {
+            "name": "Set start"
+          },
+          "set_end": {
+            "name": "Set end"
+          }
+        }
+      },
+      "next_time_off": {
+        "name": "Next time off",
+        "state_attributes": {
+          "end": {
+            "name": "End"
+          },
+          "entry_ids": {
+            "name": "Entry IDs"
+          }
+        }
+      }
+    }
   }
 }

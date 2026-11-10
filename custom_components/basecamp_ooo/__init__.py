@@ -17,8 +17,7 @@ from .api import BasecampClient
 from .const import CONF_ACCOUNT_ID, CONF_RUN_TIME, DEFAULT_RUN_TIME, DOMAIN
 from .runner import BasecampOooRunner
 
-# Task 6 adds Platform.SENSOR, Platform.BINARY_SENSOR and Platform.BUTTON.
-PLATFORMS: list[Platform] = []
+PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BINARY_SENSOR, Platform.BUTTON]
 
 type BasecampOooConfigEntry = ConfigEntry[BasecampOooRunner]
 
