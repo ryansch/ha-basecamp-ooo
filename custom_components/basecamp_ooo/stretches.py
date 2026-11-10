@@ -62,10 +62,12 @@ def _parse_date(value: str | None) -> date | None:
 def days_off(entries: list[dict], person_id: int) -> dict[date, set[int]]:
     """Map each day off to the IDs of the entries that make it a day off.
 
-    Counts non-recurring all-day entries the person participates in.
+    Counts non-recurring, active, all-day entries the person participates in.
     """
     days: dict[date, set[int]] = {}
     for entry in entries:
+        if entry.get("status", "active") != "active":
+            continue  # defensive: the API lists only active entries by default
         if not entry.get("all_day") or entry.get("recurrence_schedule"):
             continue
         if not any(p.get("id") == person_id for p in entry.get("participants") or []):
@@ -76,7 +78,7 @@ def days_off(entries: list[dict], person_id: int) -> dict[date, set[int]]:
         try:
             start = date.fromisoformat(entry["starts_at"][:10])
             end = date.fromisoformat(entry["ends_at"][:10])
-        except (KeyError, TypeError, ValueError):
+        except KeyError, TypeError, ValueError:
             continue  # malformed entry: skip it rather than fail the run
         day = start
         while day <= end:
@@ -124,8 +126,14 @@ def decide(today: date, stretches: list[Stretch], ooo: OutOfOffice) -> Decision:
         return Decision(Result.NO_TIME_OFF_TODAY, None)
     if today != stretch.start:
         return Decision(Result.MID_STRETCH, stretch)
-    if ooo.enabled:
-        if ooo.start and ooo.end and ooo.start <= today <= ooo.end:
+    if ooo.start and ooo.end:
+        # Dated OOO decides on its dates, not just the enabled flag: an expired
+        # one is absent, and a current or future one is never overwritten.
+        if ooo.end < today:
+            return Decision(Result.SET, stretch)
+        if ooo.start <= today:
             return Decision(Result.ALREADY_ACTIVE, stretch)
+        return Decision(Result.SKIPPED_EXISTING_FUTURE, stretch)
+    if ooo.enabled:
         return Decision(Result.SKIPPED_EXISTING_FUTURE, stretch)
     return Decision(Result.SET, stretch)

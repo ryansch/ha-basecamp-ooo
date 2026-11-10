@@ -256,9 +256,7 @@ def test_skips_entry_with_unparseable_date():
     garbage = entry(1, "not-a-date", "2026-11-11")
     null_end = entry(2, "2026-11-12", None)
 
-    assert days_off([garbage, null_end, VALID], PERSON_ID) == {
-        date(2026, 11, 20): {9}
-    }
+    assert days_off([garbage, null_end, VALID], PERSON_ID) == {date(2026, 11, 20): {9}}
 
 
 def test_decide_already_active_started_before_today():
@@ -266,4 +264,64 @@ def test_decide_already_active_started_before_today():
 
     assert decide(date(2026, 11, 13), [STRETCH], ooo) == Decision(
         Result.ALREADY_ACTIVE, STRETCH
+    )
+
+
+def test_ignores_trashed_entry():
+    trashed = entry(1, "2026-11-11", "2026-11-11")
+    trashed["status"] = "trashed"
+    active = entry(2, "2026-11-12", "2026-11-12")
+    active["status"] = "active"
+
+    assert days_off([trashed, active, VALID], PERSON_ID) == {
+        date(2026, 11, 12): {2},
+        date(2026, 11, 20): {9},
+    }
+
+
+def test_decide_expired_enabled_ooo_does_not_block():
+    expired = OutOfOffice(
+        enabled=True, start=date(2026, 11, 10), end=date(2026, 11, 12)
+    )
+
+    assert decide(date(2026, 11, 13), [STRETCH], expired) == Decision(
+        Result.SET, STRETCH
+    )
+
+
+def test_decide_dated_future_ooo_skipped_even_if_disabled():
+    future = OutOfOffice(enabled=False, start=date(2026, 12, 1), end=date(2026, 12, 5))
+
+    assert decide(date(2026, 11, 13), [STRETCH], future) == Decision(
+        Result.SKIPPED_EXISTING_FUTURE, STRETCH
+    )
+
+
+def test_decide_dated_active_ooo_already_active_even_if_disabled():
+    current = OutOfOffice(enabled=False, start=date(2026, 11, 13), end=STRETCH.end)
+
+    assert decide(date(2026, 11, 13), [STRETCH], current) == Decision(
+        Result.ALREADY_ACTIVE, STRETCH
+    )
+
+
+def test_decide_enabled_ooo_without_dates_skipped():
+    undated = OutOfOffice(enabled=True, start=None, end=None)
+
+    assert decide(date(2026, 11, 13), [STRETCH], undated) == Decision(
+        Result.SKIPPED_EXISTING_FUTURE, STRETCH
+    )
+
+
+def test_decide_today_in_second_of_several_stretches():
+    first = Stretch(date(2026, 11, 2), date(2026, 11, 3), (1,))
+    second = Stretch(date(2026, 11, 13), date(2026, 11, 16), (2,))
+    third = Stretch(date(2026, 12, 1), date(2026, 12, 1), (3,))
+    stretches = [first, second, third]
+
+    assert decide(date(2026, 11, 13), stretches, DISABLED) == Decision(
+        Result.SET, second
+    )
+    assert decide(date(2026, 11, 16), stretches, DISABLED) == Decision(
+        Result.MID_STRETCH, second
     )
