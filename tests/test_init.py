@@ -303,5 +303,6 @@ async def test_token_refresh_failure_starts_reauth(
     await _setup(hass, entry)
 
     assert entry.runtime_data.data.result is Result.ERROR
+    assert "authorization failed" in entry.runtime_data.data.message  # mapped as auth
     assert list(entry.async_get_active_flows(hass, {SOURCE_REAUTH}))
     client.set_out_of_office.assert_not_awaited()
