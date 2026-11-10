@@ -14,6 +14,7 @@ from .stretches import OutOfOffice
 
 MAX_ATTEMPTS = 5
 DEFAULT_RETRY_AFTER = 10
+MAX_RETRY_AFTER = 60
 
 
 class BasecampAuthError(Exception):
@@ -79,7 +80,8 @@ class BasecampClient:
         """Send a request; return (parsed JSON body, next-page URL or None).
 
         Retries 429 responses up to MAX_ATTEMPTS total, sleeping Retry-After
-        seconds between attempts. Maps 401 to BasecampAuthError and any other
+        seconds (at most MAX_RETRY_AFTER) between attempts, after releasing the
+        rate-limited response. Maps 401 to BasecampAuthError and any other
         non-2xx status or transport failure to BasecampApiError.
         """
         for attempt in range(1, MAX_ATTEMPTS + 1):
@@ -97,23 +99,25 @@ class BasecampClient:
                                 f"{method} {url}: still rate limited after "
                                 f"{MAX_ATTEMPTS} attempts"
                             )
-                        await asyncio.sleep(_retry_after(resp))
-                        continue
-                    if resp.status == 401:
+                        wait = _retry_after(resp)
+                    elif resp.status == 401:
                         raise BasecampAuthError(f"{method} {url}: unauthorized")
-                    if not 200 <= resp.status < 300:
+                    elif not 200 <= resp.status < 300:
                         raise BasecampApiError(f"{method} {url}: HTTP {resp.status}")
-                    data = await resp.json()
-                    next_link = resp.links.get("next")
-                    next_url = str(next_link["url"]) if next_link else None
-                    return data, next_url
+                    else:
+                        data = await resp.json()
+                        next_link = resp.links.get("next")
+                        next_url = str(next_link["url"]) if next_link else None
+                        return data, next_url
             except (aiohttp.ClientError, TimeoutError, ValueError) as err:
                 raise BasecampApiError(f"{method} {url}: {err}") from err
+            # Rate limited: the response is released; wait, then retry.
+            await asyncio.sleep(wait)
         raise AssertionError("unreachable")
 
 
 def _retry_after(resp: aiohttp.ClientResponse) -> int:
     try:
-        return max(0, int(resp.headers["Retry-After"]))
-    except (KeyError, ValueError):
+        return min(MAX_RETRY_AFTER, max(0, int(resp.headers["Retry-After"])))
+    except KeyError, ValueError:
         return DEFAULT_RETRY_AFTER

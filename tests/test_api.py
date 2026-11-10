@@ -143,6 +143,66 @@ async def test_429_without_retry_after_waits_default(client: BasecampClient) -> 
     sleep.assert_awaited_once_with(10)
 
 
+async def test_retry_after_capped_at_60(client: BasecampClient) -> None:
+    with (
+        CompatAioresponses() as mocked,
+        patch(
+            "custom_components.basecamp_ooo.api.asyncio.sleep", new_callable=AsyncMock
+        ) as sleep,
+    ):
+        mocked.get(
+            f"{BASE}/my/profile.json", status=429, headers={"Retry-After": "300"}
+        )
+        mocked.get(f"{BASE}/my/profile.json", payload={"id": 7})
+
+        assert await client.get_person_id() == 7
+
+    sleep.assert_awaited_once_with(60)
+
+
+async def test_sleeps_after_releasing_rate_limited_response(
+    client: BasecampClient, session: aiohttp.ClientSession
+) -> None:
+    """The 429 response is released before waiting, not held during the sleep."""
+    open_responses = 0
+    original_request = session.request
+
+    def tracking_request(*args, **kwargs):
+        ctx = original_request(*args, **kwargs)
+
+        class _Tracking:
+            async def __aenter__(self):
+                nonlocal open_responses
+                open_responses += 1
+                return await ctx.__aenter__()
+
+            async def __aexit__(self, *exc):
+                nonlocal open_responses
+                open_responses -= 1
+                return await ctx.__aexit__(*exc)
+
+        return _Tracking()
+
+    async def check_released(_delay: float) -> None:
+        assert open_responses == 0
+
+    with (
+        CompatAioresponses() as mocked,
+        patch.object(session, "request", tracking_request),
+        patch(
+            "custom_components.basecamp_ooo.api.asyncio.sleep",
+            new_callable=AsyncMock,
+            side_effect=check_released,
+        ) as sleep,
+    ):
+        mocked.get(f"{BASE}/my/profile.json", status=429, headers={"Retry-After": "1"})
+        mocked.get(f"{BASE}/my/profile.json", payload={"id": 7})
+
+        assert await client.get_person_id() == 7
+
+    sleep.assert_awaited_once_with(1)
+
+
 async def test_401_raises_auth_error(client: BasecampClient) -> None:
     with CompatAioresponses() as mocked:
         mocked.get(f"{BASE}/my/profile.json", status=401)
