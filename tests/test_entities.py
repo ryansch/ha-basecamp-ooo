@@ -65,10 +65,10 @@ ENTRIES = [
 ]
 OOO_OFF = OutOfOffice(enabled=False, start=None, end=None)
 
-NEXT_TIME_OFF = "sensor.basecamp_out_of_office_next_time_off"
-LAST_RUN = "sensor.basecamp_out_of_office_last_run"
-ACTIVE = "binary_sensor.basecamp_out_of_office_active"
-RUN_NOW = "button.basecamp_out_of_office_run_now"
+NEXT_TIME_OFF = "sensor.basecamp_ooo_next_time_off"
+LAST_RUN = "sensor.basecamp_ooo_last_run"
+ACTIVE = "binary_sensor.basecamp_ooo_active"
+RUN_NOW = "button.basecamp_ooo_run_now"
 
 
 @pytest.fixture(autouse=True)
@@ -154,7 +154,7 @@ async def test_next_time_off_state_and_attributes(
     entity = er.async_get(hass).async_get(NEXT_TIME_OFF)
     assert entity.unique_id == f"{UNIQUE_ID}_next_time_off"
     device = dr.async_get(hass).async_get(entity.device_id)
-    assert device.name == "Basecamp Out of Office"
+    assert device.name == "Basecamp OOO"
 
 
 async def test_next_time_off_unknown_when_none(

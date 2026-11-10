@@ -8,7 +8,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
 from .runner import BasecampOooRunner
 
-DEVICE_NAME = "Basecamp Out of Office"
+DEVICE_NAME = "Basecamp OOO"
 
 
 class BasecampOooEntity(CoordinatorEntity[BasecampOooRunner]):
