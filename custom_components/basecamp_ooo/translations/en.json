@@ -15,7 +15,7 @@
       },
       "schedule": {
         "title": "Time-off schedule",
-        "description": "Paste the URL of the schedule in {account} that holds your time-off entries, e.g. `https://3.basecamp.com/1234567/buckets/2345678/schedules/3456789`.",
+        "description": "Paste the URL of the schedule in {account} that holds your time-off entries, e.g. `{example_url}`.",
         "data": {
           "schedule_url": "Schedule URL"
         }

@@ -40,6 +40,7 @@ from .const import (
     DEFAULT_RUN_TIME,
     DOMAIN,
     LAUNCHPAD_IDENTITY,
+    SCHEDULE_URL_EXAMPLE,
     USER_AGENT,
 )
 
@@ -180,7 +181,10 @@ class OAuth2FlowHandler(
                 }
             ),
             errors=errors,
-            description_placeholders={"account": self._accounts[self._account_id]},
+            description_placeholders={
+                "account": self._accounts[self._account_id],
+                "example_url": SCHEDULE_URL_EXAMPLE,
+            },
         )
 
     async def async_step_reauth(

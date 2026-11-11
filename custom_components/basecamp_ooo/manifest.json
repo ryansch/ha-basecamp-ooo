@@ -1,6 +1,9 @@
 {
   "domain": "basecamp_ooo",
   "name": "Basecamp Out of Office",
+  "categories": [
+    "productivity_information.calendars_todos"
+  ],
   "codeowners": [
     "@ryansch"
   ],
@@ -9,8 +12,8 @@
     "application_credentials"
   ],
   "documentation": "https://github.com/ryansch/ha-basecamp-ooo",
-  "issue_tracker": "https://github.com/ryansch/ha-basecamp-ooo/issues",
   "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/ryansch/ha-basecamp-ooo/issues",
   "requirements": [],
   "version": "0.1.0"
 }

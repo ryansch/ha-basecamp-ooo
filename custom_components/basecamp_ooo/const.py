@@ -17,3 +17,5 @@ LAUNCHPAD_IDENTITY = "https://launchpad.37signals.com/authorization.json"
 API_BASE = "https://3.basecampapi.com/{account_id}"
 
 USER_AGENT = "Home Assistant basecamp_ooo (https://github.com/ryansch/ha-basecamp-ooo)"
+
+SCHEDULE_URL_EXAMPLE = "https://3.basecamp.com/1234567/buckets/2345678/schedules/3456789"
