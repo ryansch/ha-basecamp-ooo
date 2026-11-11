@@ -112,6 +112,7 @@ class BasecampOooRunner(DataUpdateCoordinator[RunState]):
         self._retry_unsub: CALLBACK_TYPE | None = None
         self._retry_day: date | None = None
         self._retry_attempt = 0
+        self._stopped = False
         self.data = RunState(
             last_run=None,
             result=None,
@@ -144,6 +145,12 @@ class BasecampOooRunner(DataUpdateCoordinator[RunState]):
         return state
 
     @callback
+    def async_stop_retries(self) -> None:
+        """Cancel a pending retry and schedule no more (the entry is unloading)."""
+        self._stopped = True
+        self.async_cancel_retry()
+
+    @callback
     def async_cancel_retry(self) -> None:
         """Cancel a pending retry, if any."""
         if self._retry_unsub is not None:
@@ -154,7 +161,13 @@ class BasecampOooRunner(DataUpdateCoordinator[RunState]):
     def _schedule_retry(self, state: RunState, retryable: bool) -> None:
         """Retry a failed run later the same HA-local day (not auth failures)."""
         self.async_cancel_retry()
-        if state.result is not Result.ERROR or not retryable or state.last_run is None:
+        if (
+            state.result is not Result.ERROR
+            or not retryable
+            or state.last_run is None
+            # A run still in flight when the entry unloads must not leave a timer.
+            or self._stopped
+        ):
             self._retry_day, self._retry_attempt = None, 0
             return
         today = state.last_run.date()
@@ -276,6 +289,11 @@ def _message(result: Result, stretch: Stretch | None, ooo: OutOfOffice) -> str:
     match result:
         case Result.SET:
             return f"Set out-of-office {ooo.start} to {ooo.end}."
+        case Result.ALREADY_ACTIVE if not ooo.enabled:
+            return (
+                f"Out-of-office is set for {ooo.start} to {ooo.end} but turned off; "
+                "left it as is."
+            )
         case Result.ALREADY_ACTIVE:
             return f"Out-of-office already active ({ooo.start} to {ooo.end})."
         case Result.SKIPPED_EXISTING_FUTURE:

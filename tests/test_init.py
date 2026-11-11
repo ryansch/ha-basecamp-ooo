@@ -1,5 +1,6 @@
 """Tests for the basecamp_ooo integration setup."""
 
+import asyncio
 from collections.abc import Generator
 from datetime import date, timedelta
 import time
@@ -344,3 +345,53 @@ async def test_retry_cancelled_on_unload(
     await hass.async_block_till_done(wait_background_tasks=True)
 
     assert client.list_schedule_entries.await_count == 1
+
+
+async def test_failed_startup_run_is_retried(
+    hass: HomeAssistant,
+    client_cls: MagicMock,
+    client: MagicMock,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """The catch-up run at setup is retried when it fails (entry is loaded)."""
+    client.list_schedule_entries.side_effect = [RuntimeError("Basecamp is down"), []]
+    entry = _entry(hass)
+    await _setup(hass, entry)
+    assert entry.runtime_data.data.result is Result.ERROR
+
+    freezer.tick(timedelta(minutes=5))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert client.list_schedule_entries.await_count == 2
+    assert entry.runtime_data.data.result is Result.NO_TIME_OFF_TODAY
+
+
+async def test_run_in_flight_during_unload_leaves_no_retry(
+    hass: HomeAssistant,
+    client_cls: MagicMock,
+    client: MagicMock,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """A Run now in flight across an unload that then fails leaves no retry."""
+    entry = _entry(hass)
+    await _setup(hass, entry)  # startup run succeeds
+    runner = entry.runtime_data
+    release = asyncio.Event()
+
+    async def slow_failure(_schedule_id: int) -> list:
+        await release.wait()
+        raise RuntimeError("Basecamp is down")
+
+    client.list_schedule_entries.side_effect = slow_failure
+    press = hass.async_create_task(runner.run_now())
+    await asyncio.sleep(0)  # the run is now waiting on Basecamp
+
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    release.set()
+    assert (await press).result is Result.ERROR
+
+    freezer.tick(timedelta(minutes=120))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert client.list_schedule_entries.await_count == 2  # startup + the press only
