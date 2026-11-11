@@ -1,10 +1,15 @@
 {
   "domain": "basecamp_ooo",
   "name": "Basecamp Out of Office",
-  "codeowners": ["@ryansch"],
+  "codeowners": [
+    "@ryansch"
+  ],
   "config_flow": true,
-  "dependencies": ["application_credentials"],
+  "dependencies": [
+    "application_credentials"
+  ],
   "documentation": "https://github.com/ryansch/ha-basecamp-ooo",
+  "issue_tracker": "https://github.com/ryansch/ha-basecamp-ooo/issues",
   "iot_class": "cloud_polling",
   "requirements": [],
   "version": "0.1.0"
