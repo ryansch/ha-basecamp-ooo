@@ -1,0 +1,23 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - uses: astral-sh/setup-uv@v6
+      - name: Install test dependencies
+        run: |
+          uv venv --python python3.14 .venv
+          uv pip install --python .venv/bin/python -r requirements_test.txt
+      - name: Run tests
+        run: .venv/bin/pytest -q
