@@ -19,14 +19,22 @@ with OAuth through Application Credentials. There is no YAML configuration.
    https://my.home-assistant.io/redirect/oauth
    ```
 
-3. Keep the **Client ID** and **Client Secret** handy for step 3.
+3. Optionally, upload [`assets/icon.png`](assets/icon.png) as the app's icon.
+4. Keep the **Client ID** and **Client Secret** handy for step 3.
 
 ### 2. Install the integration
 
-1. In Home Assistant, open the **Marketplace**, add
-   `https://github.com/ryansch/ha-basecamp-ooo` as a custom repository
-   (type: Integration).
-2. Install **Basecamp Out of Office** and restart Home Assistant.
+[![Open your Home Assistant instance and open a repository in the Marketplace.](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=ryansch&repository=ha-basecamp-ooo)
+
+The button opens this repository in your Home Assistant's Marketplace; then
+install it as in item 3 below. Or add it by hand:
+
+1. In Home Assistant, open the **Marketplace** and select **Add from link**
+   (top right).
+2. Enter `ryansch/ha-basecamp-ooo` (or
+   `https://github.com/ryansch/ha-basecamp-ooo`) and select **Add**. If
+   asked for a category, choose **Integration**.
+3. Install **Basecamp Out of Office** and restart Home Assistant.
 
 ### 3. Add the integration
 
