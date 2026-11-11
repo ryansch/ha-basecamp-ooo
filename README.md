@@ -27,21 +27,23 @@ with OAuth through Application Credentials. There is no YAML configuration.
 [![Open your Home Assistant instance and open a repository in the Marketplace.](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=ryansch&repository=ha-basecamp-ooo&category=integration)
 
 The button opens this repository in your Home Assistant's Marketplace; then
-install it as in item 3 below. Or add it by hand:
+install it (item 3 below). Or add it by hand:
 
 1. In Home Assistant, open the **Marketplace** and select **Add from link**
    (top right).
 2. Enter `ryansch/ha-basecamp-ooo` (or
    `https://github.com/ryansch/ha-basecamp-ooo`) and select **Add**. If
    asked for a category, choose **Integration**.
-3. Install **Basecamp Out of Office** and restart Home Assistant.
+3. Install **Basecamp Out of Office**. No restart is needed.
 
-### 3. Add the integration
+### 3. Set up the integration
 
-1. Go to **Settings > Devices & services > Add integration** and pick
-   **Basecamp Out of Office**.
+1. Select **Set up** on the integration's Marketplace page. (Later, or if you
+   closed that page, go to **Settings > Devices & services > Add integration**
+   and pick **Basecamp Out of Office**.)
 2. When asked for application credentials, enter the Client ID and Client
-   Secret from step 1.
+   Secret from step 1. **Name** is only a label for this credential pair in
+   Home Assistant; anything works, e.g. "Basecamp".
 3. Sign in to Basecamp and authorize the app.
 4. If your login has more than one Basecamp account, choose the account.
 5. Paste the URL of the schedule that holds your time-off entries, e.g.
