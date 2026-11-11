@@ -24,7 +24,7 @@ with OAuth through Application Credentials. There is no YAML configuration.
 
 ### 2. Install the integration
 
-[![Open your Home Assistant instance and open a repository in the Marketplace.](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=ryansch&repository=ha-basecamp-ooo)
+[![Open your Home Assistant instance and open a repository in the Marketplace.](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=ryansch&repository=ha-basecamp-ooo&category=integration)
 
 The button opens this repository in your Home Assistant's Marketplace; then
 install it as in item 3 below. Or add it by hand:
