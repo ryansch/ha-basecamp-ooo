@@ -6,7 +6,7 @@ import pytest
 from yarl import URL
 
 from homeassistant.core import HomeAssistant
-from pytest_homeassistant_custom_component.test_util.aiohttp import (
+from pytest_homeassistant.test_util.aiohttp import (
     AiohttpClientMocker,
 )
 
