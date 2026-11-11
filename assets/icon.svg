@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#38c6f4"/>
+      <stop offset="1" stop-color="#0b8fc4"/>
+    </linearGradient>
+    <clipPath id="house">
+      <path d="M256 92 L424 236 Q432 243 432 254 V404 Q432 428 408 428 H104 Q80 428 80 404 V254 Q80 243 88 236 Z"/>
+    </clipPath>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <!-- house -->
+  <path d="M256 92 L424 236 Q432 243 432 254 V404 Q432 428 408 428 H104 Q80 428 80 404 V254 Q80 243 88 236 Z" fill="#ffffff"/>
+  <g clip-path="url(#house)">
+    <!-- sun -->
+    <circle cx="332" cy="282" r="32" fill="#fbbf24"/>
+    <!-- island -->
+    <path d="M60 428c40-56 190-70 300-34 30 10 60 22 90 34z" fill="#fcd34d"/>
+  </g>
+  <!-- palm trunk -->
+  <path d="M232 404c4-44 0-82-14-116" stroke="#92400e" stroke-width="15" fill="none" stroke-linecap="round"/>
+  <!-- fronds -->
+  <g fill="#16a34a">
+    <path d="M218 288c-28-20-62-20-84-4 28-4 54 4 84 4z"/>
+    <path d="M218 288c-13-32-43-46-73-41 26 9 47 24 73 41z"/>
+    <path d="M218 288c8-34 38-52 70-48-28 11-49 26-70 48z"/>
+    <path d="M218 288c28-13 60-6 79 17-26-9-53-13-79-17z"/>
+    <path d="M218 288c-4-28 9-52 32-63-13 20-22 41-32 63z"/>
+  </g>
+  <!-- calendar badge -->
+  <g transform="translate(316 316)">
+    <circle cx="70" cy="70" r="78" fill="#0b8fc4"/>
+    <rect x="18" y="26" width="104" height="96" rx="16" fill="#ffffff"/>
+    <path d="M18 42a16 16 0 0 1 16-16h72a16 16 0 0 1 16 16v16H18z" fill="#f97316"/>
+    <rect x="40" y="12" width="12" height="28" rx="6" fill="#1f2937"/>
+    <rect x="88" y="12" width="12" height="28" rx="6" fill="#1f2937"/>
+    <path d="M44 90 l18 18 l36 -38" stroke="#16a34a" stroke-width="13" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>
