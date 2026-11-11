@@ -190,6 +190,22 @@ async def test_mid_stretch_does_not_post(
     client.set_out_of_office.assert_not_awaited()
 
 
+async def test_disabled_ooo_covering_today_says_turned_off(
+    runner: BasecampOooRunner, client: MagicMock
+) -> None:
+    """A dated OOO covering today but turned off is left alone, and says so."""
+    client.get_out_of_office.return_value = OutOfOffice(
+        False, date(2026, 11, 13), date(2026, 11, 16)
+    )
+
+    state = await runner.run_now()
+
+    assert state.result is Result.ALREADY_ACTIVE
+    assert "turned off" in state.message
+    assert "already active" not in state.message.lower()
+    client.set_out_of_office.assert_not_awaited()
+
+
 async def test_existing_future_ooo_not_replaced(
     runner: BasecampOooRunner, client: MagicMock
 ) -> None:
@@ -627,3 +643,20 @@ async def test_successful_run_cancels_pending_retry(
     await _advance(hass, freezer, 120)
 
     assert client.list_schedule_entries.await_count == 2
+
+
+
+async def test_failed_run_after_unload_not_retried(
+    hass: HomeAssistant,
+    runner: BasecampOooRunner,
+    client: MagicMock,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """A run that fails after the entry unloaded leaves no retry."""
+    client.list_schedule_entries.side_effect = BasecampApiError("down")
+    runner.async_stop_retries()
+
+    assert (await runner.run_now()).result is Result.ERROR
+
+    await _advance(hass, freezer, 120)
+    assert client.list_schedule_entries.await_count == 1

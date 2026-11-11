@@ -124,7 +124,7 @@ so changes you make in Basecamp show up without waiting for the next daily run.
 | --- | --- |
 | `no_time_off_today` | Today isn't part of any stretch. |
 | `mid_stretch` | Today is in a stretch but not its first day; nothing to do. |
-| `already_active` | A stretch starts today and out-of-office already covers today, or the integration already set it for this stretch (and it isn't set again). |
+| `already_active` | A stretch starts today and out-of-office already covers today (even if it is turned off in Basecamp; the message says so), or the integration already set it for this stretch (and it isn't set again). |
 | `skipped_existing_future` | A stretch starts today, but an out-of-office is already set for another period; it was left in place. |
 | `set` | Out-of-office was set for the stretch. |
 | `error` | The run failed; see `message`. |

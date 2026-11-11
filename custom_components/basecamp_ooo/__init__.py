@@ -50,7 +50,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: BasecampOooConfigEntry) 
     )
     runner = BasecampOooRunner(hass, entry, client)
     entry.runtime_data = runner
-    entry.async_on_unload(runner.async_cancel_retry)
+    entry.async_on_unload(runner.async_stop_retries)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
