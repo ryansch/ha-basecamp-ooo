@@ -19,11 +19,11 @@ from homeassistant.core import CoreState, HomeAssistant
 from homeassistant.loader import async_get_integration
 from homeassistant.setup import async_setup_component
 from homeassistant.util import dt as dt_util
-from pytest_homeassistant_custom_component.common import (
+from pytest_homeassistant.common import (
     MockConfigEntry,
     async_fire_time_changed,
 )
-from pytest_homeassistant_custom_component.test_util.aiohttp import (
+from pytest_homeassistant.test_util.aiohttp import (
     AiohttpClientMocker,
 )
 

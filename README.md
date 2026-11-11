@@ -154,10 +154,7 @@ Run the tests:
 
 Notes:
 
-- Tests currently run against Home Assistant 2026.10.4, because
-  `pytest-homeassistant-custom-component` has no 2026.11 release yet. The
-  integration itself targets 2026.11 (see `hacs.json`).
-- `tests/conftest.py` imports `custom_components.basecamp_ooo` at module level.
-  That import beats the `custom_components` package bundled with
-  `pytest-homeassistant-custom-component`, so Home Assistant's loader finds this
-  integration. Don't remove it, and don't add a `custom_components/__init__.py`.
+- Tests use [`pytest-homeassistant`](https://github.com/home-assistant/core/tree/dev/packages/pytest-homeassistant),
+  Home Assistant's own test package. Its version pins the Home Assistant
+  version the tests run against (currently 2026.11.1); upgrade them together.
+  Don't install `pytest-homeassistant-custom-component` alongside it.
